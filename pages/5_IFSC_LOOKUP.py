@@ -67,7 +67,7 @@ def process_ifsc_codes(ifsc_codes):
 
 st.set_page_config(page_title="IFSC Code Lookup", layout="wide")
 st.title("IFSC Code Lookup")
-st.markdown("Created By Abir using [Razorpay API](https://ifsc.razorpay.com/)")
+st.markdown("Created using [Razorpay API](https://ifsc.razorpay.com/)")
 
 # Use a form for input so that the whole page doesn’t rerun with every change
 with st.form(key='ifsc_form'):
