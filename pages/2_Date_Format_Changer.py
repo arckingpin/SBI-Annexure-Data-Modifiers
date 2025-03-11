@@ -82,7 +82,7 @@ def main():
                 if st.button("Remove Time"):
                     df_processed = remove_time_from_column(df_processed, selected_column)
                     st.success(f"Time removed from column: {selected_column}")
-                    st.experimental_rerun()
+                    st.rerun()  # Corrected: Use st.rerun() instead of st.experimental_rerun()
 
             # Save processed file for download
             output = BytesIO()
