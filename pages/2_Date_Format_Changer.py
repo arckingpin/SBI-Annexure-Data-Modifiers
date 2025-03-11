@@ -39,6 +39,7 @@ def remove_time_from_column(df, column):
     if pd.api.types.is_datetime64_any_dtype(df[column]):
         df[column] = df[column].dt.date  # Remove time from datetime64 columns
     else:
+        # For text-based date-time values
         df[column] = df[column].apply(lambda x: x.split(" ")[0] if isinstance(x, str) and " " in x else x)
     return df
 
@@ -51,43 +52,48 @@ def main():
     
     if uploaded_file is not None:
         try:
+            # Read original file and display original data
             df = pd.read_excel(uploaded_file)
             st.subheader("Original Data")
             st.dataframe(df)
 
-            # Process the dataframe (only needed for text-based date formats)
-            df_processed = process_dataframe(df)
+            # Process the data (for text-based date formats) and store in session state for persistence.
+            if "df_processed" not in st.session_state:
+                st.session_state.df_processed = process_dataframe(df)
+            
+            processed_df = st.session_state.df_processed
             st.subheader("Processed Data")
-            processed_data_container = st.container()
-            with processed_data_container:
-                st.dataframe(df_processed)
+            st.dataframe(processed_df)
 
-            # Identify columns containing datetime values (both text-based and datetime64)
+            # Identify columns containing datetime values (datetime64 or text-based)
             datetime_columns = [
-                col for col in df_processed.columns 
-                if pd.api.types.is_datetime64_any_dtype(df_processed[col]) or
-                df_processed[col].astype(str).str.contains(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", regex=True).any()
+                col for col in processed_df.columns 
+                if pd.api.types.is_datetime64_any_dtype(processed_df[col]) or
+                processed_df[col].astype(str).str.contains(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", regex=True).any()
             ]
 
             if datetime_columns:
                 st.subheader("Navigate to Date-Time Columns")
                 for col in datetime_columns:
-                    if st.button(f"Jump to '{col}'"):
+                    if st.button(f"Jump to '{col}'", key=f"jump_{col}"):
                         st.write(f"Displaying column: {col}")
-                        st.dataframe(df_processed[[col]])
+                        st.dataframe(processed_df[[col]])
 
-                # Allow user to remove time from selected column
+                # Provide option to remove the time aspect from a chosen column.
                 st.subheader("Remove Time from Selected Column")
-                selected_column = st.selectbox("Select a column to remove time:", datetime_columns)
-                if st.button("Remove Time"):
-                    df_processed = remove_time_from_column(df_processed, selected_column)
-                    st.success(f"Time removed from column: {selected_column}")
-                    st.rerun()  # Corrected: Use st.rerun() instead of st.experimental_rerun()
+                selected_column = st.selectbox("Select a column to remove time:", datetime_columns, key="remove_select")
+                if st.button("Remove Time", key="remove_button"):
+                    # Update the processed DataFrame in session state.
+                    st.session_state.df_processed = remove_time_from_column(processed_df.copy(), selected_column)
+                    st.success(f"Time successfully removed from column: {selected_column}")
+                    # Show updated processed data
+                    st.subheader("Updated Processed Data")
+                    st.dataframe(st.session_state.df_processed)
 
-            # Save processed file for download
+            # Prepare processed data for download
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_processed.to_excel(writer, index=False)
+                st.session_state.df_processed.to_excel(writer, index=False)
             processed_data = output.getvalue()
 
             st.download_button(
