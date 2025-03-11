@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from io import BytesIO
 
-# Function to check and process individual cell values
+# Function to convert text-based date/time values
 def process_value(val):
     if isinstance(val, str):
         val_str = val.strip()
@@ -28,7 +28,7 @@ def process_value(val):
                 return date_obj.strftime("%Y-%m-%d")
             except Exception:
                 pass
-    return val  # Return the original value if no date/datetime is recognized
+    return val  # Return original value if no date/datetime is recognized
 
 # Apply processing function to entire DataFrame
 def process_dataframe(df):
@@ -36,13 +36,16 @@ def process_dataframe(df):
 
 # Remove time from date-time values in a column
 def remove_time_from_column(df, column):
-    df[column] = df[column].apply(lambda x: x.split(" ")[0] if isinstance(x, str) and " " in x else x)
+    if pd.api.types.is_datetime64_any_dtype(df[column]):
+        df[column] = df[column].dt.date  # Remove time from datetime64 columns
+    else:
+        df[column] = df[column].apply(lambda x: x.split(" ")[0] if isinstance(x, str) and " " in x else x)
     return df
 
 def main():
     st.set_page_config(page_title="Excel Date Formatter", layout="wide")
     st.title("Excel Date Formatter")
-    st.write("Upload an Excel file. The app detects dates in the formats 'dd mm yyyy' or 'dd mm yyyy hh:mm' and converts them to 'yyyy-mm-dd' or 'yyyy-mm-dd hh:mm' respectively.")
+    st.write("Upload an Excel file. The app detects date-time values and allows you to remove the time part if needed.")
 
     uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
     
@@ -52,15 +55,19 @@ def main():
             st.subheader("Original Data")
             st.dataframe(df)
 
-            # Process the dataframe
+            # Process the dataframe (only needed for text-based date formats)
             df_processed = process_dataframe(df)
             st.subheader("Processed Data")
             processed_data_container = st.container()
             with processed_data_container:
                 st.dataframe(df_processed)
 
-            # Identify columns containing date and time
-            datetime_columns = [col for col in df_processed.columns if df_processed[col].astype(str).str.contains(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", regex=True).any()]
+            # Identify columns containing datetime values (both text-based and datetime64)
+            datetime_columns = [
+                col for col in df_processed.columns 
+                if pd.api.types.is_datetime64_any_dtype(df_processed[col]) or
+                df_processed[col].astype(str).str.contains(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", regex=True).any()
+            ]
 
             if datetime_columns:
                 st.subheader("Navigate to Date-Time Columns")
