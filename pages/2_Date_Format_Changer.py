@@ -34,13 +34,13 @@ def process_value(val):
 def process_dataframe(df):
     return df.applymap(process_value)
 
-# Remove time from date-time values in a column
+# Remove time from date-time values in a column and convert to text
 def remove_time_from_column(df, column):
     if pd.api.types.is_datetime64_any_dtype(df[column]):
-        df[column] = df[column].dt.date  # Remove time from datetime64 columns
+        df[column] = df[column].dt.strftime("%Y-%m-%d")  # Convert datetime64 to text
     else:
-        # For text-based date-time values
         df[column] = df[column].apply(lambda x: x.split(" ")[0] if isinstance(x, str) and " " in x else x)
+    df[column] = df[column].astype(str)  # Ensure output is text
     return df
 
 def main():
