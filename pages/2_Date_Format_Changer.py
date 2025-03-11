@@ -53,7 +53,7 @@ def main():
     if uploaded_file is not None:
         try:
             # Read original file and display original data
-            df = pd.read_excel(uploaded_file)
+            df = pd.read_excel(uploaded_file, dtype=str)  # Read everything as text to prevent Excel auto-formatting
             st.subheader("Original Data")
             st.dataframe(df)
 
@@ -90,10 +90,22 @@ def main():
                     st.subheader("Updated Processed Data")
                     st.dataframe(st.session_state.df_processed)
 
-            # Prepare processed data for download
+            # Save processed data with text formatting
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                st.session_state.df_processed.to_excel(writer, index=False)
+                workbook = writer.book
+                text_format = workbook.add_format({'num_format': '@'})  # Force text format
+                
+                df_processed = st.session_state.df_processed
+                
+                sheet_name = "Processed Data"
+                df_processed.to_excel(writer, index=False, sheet_name=sheet_name)
+                worksheet = writer.sheets[sheet_name]
+                
+                # Apply text format to all columns to prevent scientific notation
+                for col_num, col_name in enumerate(df_processed.columns):
+                    worksheet.set_column(col_num, col_num, None, text_format)
+                    
             processed_data = output.getvalue()
 
             st.download_button(
