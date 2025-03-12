@@ -34,12 +34,21 @@ def process_value(val):
 def process_dataframe(df):
     return df.applymap(process_value)
 
-# Remove time from date-time values in a column and convert to text
+# Remove time from date-time values in a column and convert to text.
+# If a cell is blank, leave it blank.
 def remove_time_from_column(df, column):
+    def remove_time_value(val):
+        # If the cell is NaN or an empty string, leave it unchanged.
+        if pd.isna(val) or (isinstance(val, str) and val.strip() == ""):
+            return ""
+        if isinstance(val, str) and " " in val:
+            return val.split(" ")[0]
+        return val
     if pd.api.types.is_datetime64_any_dtype(df[column]):
-        df[column] = df[column].dt.strftime("%Y-%m-%d")  # Convert datetime64 to text
+        # For datetime64 values, convert using strftime if not NaT, else blank.
+        df[column] = df[column].apply(lambda x: x.strftime("%Y-%m-%d") if pd.notnull(x) else "")
     else:
-        df[column] = df[column].apply(lambda x: x.split(" ")[0] if isinstance(x, str) and " " in x else x)
+        df[column] = df[column].apply(remove_time_value)
     df[column] = df[column].astype(str)  # Ensure output is text
     return df
 
@@ -52,12 +61,12 @@ def main():
     
     if uploaded_file is not None:
         try:
-            # Read original file and display original data
-            df = pd.read_excel(uploaded_file, dtype=str)  # Read everything as text to prevent Excel auto-formatting
+            # Read the Excel file as text to prevent Excel auto-formatting issues.
+            df = pd.read_excel(uploaded_file, dtype=str)
             st.subheader("Original Data")
             st.dataframe(df)
 
-            # Process the data (for text-based date formats) and store in session state for persistence.
+            # Process the data (for text-based date formats) and store in session state.
             if "df_processed" not in st.session_state:
                 st.session_state.df_processed = process_dataframe(df)
             
@@ -65,7 +74,7 @@ def main():
             st.subheader("Processed Data")
             st.dataframe(processed_df)
 
-            # Identify columns containing datetime values (datetime64 or text-based)
+            # Identify columns containing datetime values (either datetime64 or text-based with time)
             datetime_columns = [
                 col for col in processed_df.columns 
                 if pd.api.types.is_datetime64_any_dtype(processed_df[col]) or
@@ -79,31 +88,28 @@ def main():
                         st.write(f"Displaying column: {col}")
                         st.dataframe(processed_df[[col]])
 
-                # Provide option to remove the time aspect from a chosen column.
+                # Option to remove time from a selected date-time column.
                 st.subheader("Remove Time from Selected Column")
                 selected_column = st.selectbox("Select a column to remove time:", datetime_columns, key="remove_select")
                 if st.button("Remove Time", key="remove_button"):
-                    # Update the processed DataFrame in session state.
                     st.session_state.df_processed = remove_time_from_column(processed_df.copy(), selected_column)
                     st.success(f"Time successfully removed from column: {selected_column}")
-                    # Show updated processed data
                     st.subheader("Updated Processed Data")
                     st.dataframe(st.session_state.df_processed)
 
-            # Save processed data with text formatting
+            # Save the processed data to an Excel file with text formatting.
             output = BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                 workbook = writer.book
-                text_format = workbook.add_format({'num_format': '@'})  # Force text format
+                text_format = workbook.add_format({'num_format': '@'})  # Force text format for all columns.
                 
                 df_processed = st.session_state.df_processed
-                
                 sheet_name = "Processed Data"
                 df_processed.to_excel(writer, index=False, sheet_name=sheet_name)
                 worksheet = writer.sheets[sheet_name]
                 
-                # Apply text format to all columns to prevent scientific notation
-                for col_num, col_name in enumerate(df_processed.columns):
+                # Apply text format to all columns.
+                for col_num, _ in enumerate(df_processed.columns):
                     worksheet.set_column(col_num, col_num, None, text_format)
                     
             processed_data = output.getvalue()
